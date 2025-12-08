@@ -7,4 +7,5 @@ For UCSB ECE 238 class. Other projects: [1&2](https://github.com/changleo3010/23
 
 First stage: TO swin-up. Second stage: PFL controlled upright 
 
+Simulation:
 <img width="1121" height="897" alt="image" src="https://github.com/user-attachments/assets/7a4a971e-b66b-4e29-bc78-47cf3f72c30a" />
