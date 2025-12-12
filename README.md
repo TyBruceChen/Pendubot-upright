@@ -9,3 +9,7 @@ First stage: TO swin-up. Second stage: PFL controlled upright
 
 Simulation:
 <img width="1121" height="897" alt="image" src="https://github.com/user-attachments/assets/7a4a971e-b66b-4e29-bc78-47cf3f72c30a" />
+
+
+Animation:
+![ezgif-755f90398370c075](https://github.com/user-attachments/assets/9165a792-c94f-4add-9a35-e3347bf3960b)
