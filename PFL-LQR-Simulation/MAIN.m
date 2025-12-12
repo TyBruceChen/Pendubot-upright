@@ -1,11 +1,11 @@
 clear;clc;
 xF = [pi/2; 0; 0; 0];
 uF = 0;
-t_end_sim = 2.5;
+t_end_sim = 3;
 u_max = 12;
 u_min = -12;
 
-x0 = [-pi/2; 0; 1; 1] + 1e-4;
+x0 = [-pi/2; 0; 0; 0];
 global lqr_engaged;
 lqr_engaged = false;
 
@@ -18,7 +18,7 @@ fprintf('Calculating LQR Gain...\n');
 % Since calculating partial derivatives manually is messy, 
 % we use numerical linearization (finite differences).
 
-delta = 1e-1;
+delta = 1e-2;
 A = zeros(4,4);
 B = zeros(4,1);
 v_eq = 1e-4; % Equilibrium torque at top is 0 for this model
@@ -39,7 +39,7 @@ f_pert = pfl_virtual_dynamics(x_eq, v_pert);
 B = (f_pert - f0) / delta;
 
 % LQR Weights
-Q = diag([100, 100, 10, 10]); % Penalize position errors heavily
+Q = diag([500, 500, 50, 50]); % Penalize position errors heavily
 R = 1;                        % Cheap control authority
 K = lqr(A, B, Q, R);
 
@@ -56,7 +56,7 @@ mode_log  = zeros(length(t_sim), 1); % 0=Swing, 1=LQR
 lqr_engaged = false;
 for i = 1:length(t_sim)
     [u_val, mode] = hybrid_controller(x_sim(i,:)', xF, K, u_max);
-    disp(mode)
+    % disp(mode)
     u_sim_log(i) = u_val;
     mode_log(i)  = mode;
 end
@@ -102,7 +102,7 @@ animatePendubot(t_sim, x_sim);
 %%
 
 function [u, mode] = hybrid_controller(x, xF, K, u_max)
-    uF=0; kp = 250;kd = 30;
+    uF=0; kp = 3650;kd = 180; %best 3780, 180
     global lqr_engaged;
     % 1. Calculate Error
     error = x - xF;
@@ -114,7 +114,7 @@ function [u, mode] = hybrid_controller(x, xF, K, u_max)
     vel_err = norm(e_vel);
 
     %disp(error)
-    if ((pos_err >= 0.6) || (vel_err >= 15.0)) && (lqr_engaged == false)
+    if ((pos_err >= 0.8) || (vel_err >= 20.0)) && (lqr_engaged == false)
         % --- SWING UP MODE (Trajectory Playback) ---
         mode = 0;
         u = pendubot_pfl_controller(x, xF(1), xF(3), uF, kp, kd);
@@ -131,7 +131,6 @@ function [u, mode] = hybrid_controller(x, xF, K, u_max)
     
     % 3. Saturation (Physical Limits)
     u = max(min(u, u_max), -u_max);
-    disp(mode);
 end
 
 % --- PFL Helper: Calculates dynamics assuming q1_ddot = v ---
