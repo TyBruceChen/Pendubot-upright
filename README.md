@@ -1,5 +1,5 @@
 # Pendubot-upright
-Control the underactuated system pendubot from down to upright through TO and PFL
+Control the underactuated system pendubot from down to upright through TO and LQR
 
 Authors: Tianyi (Bruce) Chen, Chun-yu Chang
 
