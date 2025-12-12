@@ -4,4 +4,5 @@ This is the final version of Pendubot swing up simulation through PFL (Swing up)
 
 
 Animation:
-![ezgif-1486c5ebae5d667c](https://github.com/user-attachments/assets/996f06ec-03e4-4585-8e24-accd830f328e)
+
+![ezgif-2e6e414e4781c389](https://github.com/user-attachments/assets/a2eff095-3093-4217-81a4-0950385518e0)
