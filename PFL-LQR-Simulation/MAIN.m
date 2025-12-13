@@ -14,38 +14,11 @@ lqr_engaged = false;
 % ============================
 fprintf('Calculating LQR Gain...\n');
 
-% We need the A and B matrices at the top (xF).
-% Since calculating partial derivatives manually is messy, 
-% we use numerical linearization (finite differences).
+[Kdlqr, Ad, Bd, xeq] = lqr_upright_discrete();
 
-delta = 1e-2;
-A = zeros(4,4);
-B = zeros(4,1);
-v_eq = 1e-4; % Equilibrium torque at top is 0 for this model
-x_eq = xF;
-
-% Compute A matrix (df/dx)
-f0 = pfl_virtual_dynamics(x_eq, v_eq);
-for i = 1:4
-    x_pert = x_eq;
-    x_pert(i) = x_pert(i) + delta;
-    f_pert = pfl_virtual_dynamics(x_pert, v_eq);
-    A(:,i) = (f_pert - f0) / delta;
-end
-
-% Compute B matrix (df/du)
-v_pert = v_eq + delta;
-f_pert = pfl_virtual_dynamics(x_eq, v_pert);
-B = (f_pert - f0) / delta;
-
-% LQR Weights
-Q = diag([500, 500, 50, 50]); % Penalize position errors heavily
-R = 1;                        % Cheap control authority
-K = lqr(A, B, Q, R);
-
-disp('LQR Gain K:'); disp(K);
+disp('Discrete LQR Gain K:'); disp(Kdlqr);
 %%
-ode_controller = @(x) hybrid_controller(x, xF, K, u_max);
+ode_controller = @(x) hybrid_controller(x, xF, Kdlqr, u_max);
 ode_fun = @(t, x) pendubot_dynamics(t,x, ode_controller(x));
 
 [t_sim, x_sim] = ode45(ode_fun, [0:0.001: t_end_sim], x0);
@@ -55,7 +28,7 @@ u_sim_log = zeros(length(t_sim), 1);
 mode_log  = zeros(length(t_sim), 1); % 0=Swing, 1=LQR
 lqr_engaged = false;
 for i = 1:length(t_sim)
-    [u_val, mode] = hybrid_controller(x_sim(i,:)', xF, K, u_max);
+    [u_val, mode] = hybrid_controller(x_sim(i,:)', xF, Kdlqr, u_max);
     % disp(mode)
     u_sim_log(i) = u_val;
     mode_log(i)  = mode;
@@ -124,8 +97,7 @@ function [u, mode] = hybrid_controller(x, xF, K, u_max)
         lqr_engaged = true;
         % --- LQR MODE ---
         mode = 1;
-        v = -K*[e_pos; e_vel];
-        u = inverse_dynamics_pfl(x,v);
+        u = -K * [e_pos; e_vel];
         % disp('LQR Activated');
     end
     
@@ -133,66 +105,54 @@ function [u, mode] = hybrid_controller(x, xF, K, u_max)
     u = max(min(u, u_max), -u_max);
 end
 
-% --- PFL Helper: Calculates dynamics assuming q1_ddot = v ---
-function dx = pfl_virtual_dynamics(x, v)
-    % Unpack
-    q1 = x(1); q2 = x(2); dq1 = x(3); dq2 = x(4);
-    
-    % Get Matrices
-    [D, H, Phi] = get_matrices(x);
-    d21 = D(2,1); d22 = D(2,2);
-    h2 = H(2); phi2 = Phi(2);
-    
-    % If we force ddq1 = v, what happens to ddq2?
-    % Equation 2: d21*v + d22*ddq2 + h2 + phi2 = 0
-    % ddq2 = -inv(d22) * (d21*v + h2 + phi2)
-    
-    ddq2 = -(d21*v + h2 + phi2) / d22;
-    
-    dx = [dq1; dq2; v; ddq2];
+function [Ac, Bc] = linearize_pendubot_upright()
+    % Upright equilibrium
+    xeq  = [pi/2; 0; 0; 0];
+    taueq = 0;
+
+    delta = 1e-6;
+
+    % f0
+    f0 = pendubot_dynamics(0, xeq, taueq);
+
+    % A = df/dx
+    Ac = zeros(4,4);
+    for i = 1:4
+        xpert = xeq;
+        xpert(i) = xpert(i) + delta;
+        fpert = pendubot_dynamics(0, xpert, taueq);
+        Ac(:,i) = (fpert - f0)/delta;
+    end
+
+    % B = df/dtau
+    fpert_u = pendubot_dynamics(0, xeq, taueq + delta);
+    Bc = (fpert_u - f0)/delta;
 end
 
-% --- PFL Helper: Calculates Torque to achieve q1_ddot = v ---
-function tau = inverse_dynamics_pfl(x, v)
-    % Unpack
-    % q1 = x(1); q2 = x(2); dq1 = x(3); dq2 = x(4);
-    
-    [D, H, Phi] = get_matrices(x);
-    d11 = D(1,1); d12 = D(1,2);
-    d21 = D(2,1); d22 = D(2,2);
-    h1 = H(1); h2 = H(2);
-    phi1 = Phi(1); phi2 = Phi(2);
-    
-    % From PFL derivation (Collocated Linearization):
-    % tau = M_bar * v + N_bar
-    
-    % M_bar = d11 - d12*inv(d22)*d21
-    m_bar = d11 - (d12 * d21 / d22);
-    
-    % N_bar = (h1 + phi1) - d12*inv(d22)*(h2 + phi2)
-    n_bar = (h1 + phi1) - (d12 / d22) * (h2 + phi2);
-    
-    tau = m_bar * v + n_bar;
+function [Ad, Bd] = c2d_zoh(Ac, Bc, Ts)
+    n = size(Ac,1);
+    M = [Ac, Bc; zeros(1,n), 0];
+    Md = expm(M*Ts);
+    Ad = Md(1:n, 1:n);
+    Bd = Md(1:n, n+1);
 end
 
-% --- Standard Matrices Helper ---
-function [D, H, Phi] = get_matrices(x)
-    q1 = x(1); q2 = x(2); dq1 = x(3); dq2 = x(4);
-    
-    g   = 9.81;
-    Th1 = 3.08e-2; Th2 = 1.06e-2; Th3 = 9.5e-3;
-    Th4 = 2.087e-1; Th5 = 6.3e-2;
-    
-    c2 = cos(q2); s2 = sin(q2);
-    c1 = cos(q1); c12 = cos(q1+q2);
+function [Kdlqr, Ad, Bd, xeq] = lqr_upright_discrete()
+    Ts = 1e-3;
 
-    D = [Th1 + Th2 + 2*Th3*c2,  Th2 + Th3*c2;
-         Th2 + Th3*c2,          Th2];
-     
-    h_term = Th3 * s2;
-    H = [-h_term * dq2 * (2*dq1 + dq2);
-          h_term * dq1^2];
-      
-    Phi = [Th4*g*c1 + Th5*g*c12;
-           Th5*g*c12];
+    % Linearize continuous-time model at upright
+    [Ac, Bc] = linearize_pendubot_upright();
+
+    % Discretize to match Kalman script form
+    [Ad, Bd] = c2d_zoh(Ac, Bc, Ts);
+
+    % Upright equilibrium
+    xeq = [pi/2; 0; 0; 0];
+
+    % Weights (you can reuse yours as a starting point)
+    Q = diag([500, 500, 50, 50]);
+    R = 1;
+
+    % Discrete LQR (note: dlqr, not lqr)
+    Kdlqr = dlqr(Ad, Bd, Q, R);
 end
