@@ -5,6 +5,9 @@ Authors: Tianyi (Bruce) Chen, Chun-yu Chang
 
 For UCSB ECE 238 class. Other projects: [1&2](https://github.com/changleo3010/238-Control-Lab-project).
 
+**Current Progress Demo:**
+[PFL-LQR-Kalman-simulink](/PFL-LQR-Kalman-simulink)
+
 ### TO + LQR: 
 First stage: TO swin-up. Second stage: LQR controlled upright 
 
